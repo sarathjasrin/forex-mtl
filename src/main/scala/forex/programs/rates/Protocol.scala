@@ -1,12 +1,11 @@
 package forex.programs.rates
 
-import forex.domain.Currency
+import forex.domain.Rate
 
 object Protocol {
 
   final case class GetRatesRequest(
-      from: Currency,
-      to: Currency
+    pairs: List[Rate.Pair]
   )
 
 }

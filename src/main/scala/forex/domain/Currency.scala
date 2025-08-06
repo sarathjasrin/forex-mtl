@@ -1,18 +1,28 @@
 package forex.domain
 
 import cats.Show
+import io.circe.Decoder
+
 
 sealed trait Currency
 
 object Currency {
   case object AUD extends Currency
+
   case object CAD extends Currency
+
   case object CHF extends Currency
+
   case object EUR extends Currency
+
   case object GBP extends Currency
+
   case object NZD extends Currency
+
   case object JPY extends Currency
+
   case object SGD extends Currency
+
   case object USD extends Currency
 
   implicit val show: Show[Currency] = Show.show {
@@ -37,6 +47,10 @@ object Currency {
     case "JPY" => JPY
     case "SGD" => SGD
     case "USD" => USD
+  }
+
+  implicit val decoder: Decoder[Currency] = Decoder.decodeString.map { str =>
+    fromString(str)
   }
 
 }

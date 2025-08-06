@@ -1,8 +1,9 @@
 package forex.services.rates
 
-import cats.Applicative
-import interpreters._
+import cats.effect.Sync
+import forex.repository.OneFrameRepository
+import forex.services.rates.interpreters._
 
 object Interpreters {
-  def dummy[F[_]: Applicative]: Algebra[F] = new OneFrameDummy[F]()
+  def live[F[_] : Sync](repo: OneFrameRepository[F]): Algebra[F] = new OneFrameLive[F](repo)
 }
