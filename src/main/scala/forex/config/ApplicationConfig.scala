@@ -17,5 +17,7 @@ case class HttpConfig(
 
 case class OneFrameConfig(
   host: Uri,
-  token: String
+  token: String,
+  cacheTtl: FiniteDuration,
+  cleanupInterval: FiniteDuration
 )

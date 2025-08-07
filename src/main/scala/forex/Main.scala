@@ -14,19 +14,19 @@ object Main extends IOApp {
 
 }
 
-class Application[F[_] : ConcurrentEffect : Timer] {
+class Application[F[_]: ConcurrentEffect: Timer] {
 
   def stream(ec: ExecutionContext): Stream[F, Unit] = {
     for {
       config <- Config.stream("app")
       clientResource = BlazeClientBuilder[F](ec).resource
       _ <- Stream.resource(clientResource).flatMap { client =>
-        val module = new Module[F](config, client)
-
-        BlazeServerBuilder[F](ec)
-          .bindHttp(config.http.port, config.http.host)
-          .withHttpApp(module.httpApp)
-          .serve
+        Stream.eval(Module.make[F](config, client)).flatMap { module =>
+          BlazeServerBuilder[F](ec)
+            .bindHttp(config.http.port, config.http.host)
+            .withHttpApp(module.httpApp)
+            .serve
+        }
       }
     } yield ()
   }

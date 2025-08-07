@@ -18,7 +18,6 @@ object LoggerService {
     Sync[F].delay(logger.warn(message))
 
   def error[F[_] : Sync](logger: Logger, message: String): F[Unit] = {
-    println(s"Test: $message")
     Sync[F].delay(logger.error(message))
   }
 

@@ -1,27 +1,61 @@
 package forex.programs.rates
 
-import cats.Functor
 import cats.data.EitherT
+import cats.effect.Sync
+import cats.syntax.all._
 import forex.domain._
 import forex.programs.rates.errors._
 import forex.services.RatesService
+import forex.services.cache.CacheAlgebra
+import forex.services.logger.LoggerService
 
 
-class Program[F[_] : Functor](
-  ratesService: RatesService[F]
+class Program[F[_] : Sync](
+  ratesService: RatesService[F],
+  cache: CacheAlgebra[F, String, Rate]
 ) extends Algebra[F] {
+  private val logger = LoggerService.loggerFor[Program[F]]
 
-  override def get(request: Protocol.GetRatesRequest): F[Either[Error, List[Rate]]] =
-    EitherT(
-      ratesService.get(request.pairs)
-    ).leftMap(errors.toProgramError).value
+  override def get(request: Protocol.GetRatesRequest): F[Either[Error, List[Rate]]] = {
+    val pairStrings = request.pairs.map(p => s"${p.from.show}${p.to.show}")
 
+    EitherT.liftF {
+      cache.getMany(pairStrings).flatMap { cachedRates =>
+        val cached = cachedRates.flatten
+        val missingPairs = pairStrings.zip(cachedRates).collect {
+          case (pair, None) => pair
+        }
+
+        if (missingPairs.isEmpty) {
+          for {
+            _ <- LoggerService.info[F](logger, s"Cache hit for all pairs: $pairStrings")
+          } yield Right(cached): Either[Error, List[Rate]]
+        } else {
+          LoggerService.info[F](logger, s"Cache miss for pairs: $missingPairs") >>
+            EitherT(
+              ratesService.get(
+                request.pairs.filter(p => missingPairs.contains(s"${p.from.show}${p.to.show}"))
+              )
+            ).leftMap(errors.toProgramError)
+              .value
+              .flatTap {
+                case Right(rates) =>
+                  LoggerService.info[F](logger, s"Received rates from service: $rates") >>
+                    rates.traverse_ { rate =>
+                      cache.put(s"${rate.from}${rate.to}", rate)
+                    }
+                case Left(_) => Sync[F].unit
+              }.map(_.map(rates => cached ++ rates.filterNot(r => cached.exists(_.from == r.from && r.to == r.to))))
+        }
+      }
+    }.merge
+  }
 }
 
 object Program {
-
-  def apply[F[_] : Functor](
-    ratesService: RatesService[F]
-  ): Algebra[F] = new Program[F](ratesService)
-
+  def apply[F[_] : Sync](
+    ratesService: RatesService[F],
+    cache: CacheAlgebra[F, String, Rate]
+  ): Algebra[F] = new Program[F](ratesService, cache)
 }
+

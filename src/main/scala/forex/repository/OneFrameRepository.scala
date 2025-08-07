@@ -7,7 +7,6 @@ import forex.domain.Rate
 import forex.domain.Rate.Pair
 import forex.http.RequestBuilder
 import forex.services.logger.LoggerService
-import io.circe.Decoder
 import org.http4s.EntityDecoder
 import org.http4s.circe.jsonOf
 import org.http4s.client.Client
@@ -22,14 +21,6 @@ object OneFrameRepository {
 
     private val logger = LoggerService.loggerFor[OneFrameRepository[F]]
     private val requestBuilder: RequestBuilder[F] = RequestBuilder.oneFrame[F](config)
-    implicit val rateDecoder: Decoder[Rate] = Decoder.forProduct6(
-      "from",
-      "to",
-      "bid",
-      "ask",
-      "price",
-      "time_stamp"
-    )(Rate.apply)
 
     implicit val rateListDecoder: EntityDecoder[F, List[Rate]] =
       jsonOf[F, List[Rate]]
@@ -41,7 +32,7 @@ object OneFrameRepository {
 
       for {
         request <- requestBuilder.buildGet("/rates", queryParams)
-        _ <- LoggerService.info[F](logger, s"Sending request to OneFrame API: $request")
+        _ <- LoggerService.info[F](logger, s"Sending request to OneFrame API: ${request.uri}")
         response <- client.expect[List[Rate]](request)
       } yield response
     }

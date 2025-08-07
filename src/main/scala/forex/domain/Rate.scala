@@ -1,5 +1,7 @@
 package forex.domain
 
+import io.circe.Decoder
+
 case class Rate(
   from: Currency,
   to: Currency,
@@ -14,4 +16,13 @@ object Rate {
     from: Currency,
     to: Currency
   )
+
+  implicit val rateDecoder: Decoder[Rate] = Decoder.forProduct6(
+    "from",
+    "to",
+    "bid",
+    "ask",
+    "price",
+    "time_stamp"
+  )(Rate.apply)
 }
