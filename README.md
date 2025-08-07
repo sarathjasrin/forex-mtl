@@ -82,6 +82,8 @@ A production-ready Scala service that proxies currency exchange rate requests to
 
 **Cache Behavior:**
 
+Since `One-Frame API` supports up to 10k per day. We could utilize in-memory cache to return results up to 5mins.
+ 
 - Rates are cached for `295 seconds` (configurable via `oneFrame.cache-ttl`).
 - Subsequent requests within TTL return cached rates (logged as cache hits).
 - Expired entries are removed every 50 seconds (configurable via `oneFrame.cleanup-interval`).
