@@ -14,6 +14,7 @@ class RatesHttpRoutes[F[_] : Sync](rates: RatesProgram[F]) extends Http4sDsl[F] 
 
   import Converters._
   import Protocol._
+  import QueryParams._
 
   private[http] val prefixPath = "/rates"
 
@@ -21,6 +22,10 @@ class RatesHttpRoutes[F[_] : Sync](rates: RatesProgram[F]) extends Http4sDsl[F] 
     jsonEncoderOf[F, List[GetApiResponse]]
 
   private val httpRoutes: HttpRoutes[F] = HttpRoutes.of[F] {
+    case GET -> Root :? FromQueryParam(from) +& ToQueryParam(to) =>
+      rates.getSingle(RatesProgramProtocol.GetSingleRateRequest(from, to)).flatMap(Sync[F].fromEither).flatMap { rate =>
+        Ok(rate.asGetApiResponse)
+      }
     case GET -> Root :? QueryParams.PairQueryParam(pairsValidated) =>
       pairsValidated.fold(
         failures => BadRequest(failures.map(_.details).toList.mkString(", ")),

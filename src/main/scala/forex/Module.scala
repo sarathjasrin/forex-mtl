@@ -18,12 +18,13 @@ class Module[F[_]](
 )
 
 object Module {
-  def make[F[_]: Concurrent: Timer](config: ApplicationConfig, client: Client[F]): F[Module[F]] = {
+  def make[F[_] : Concurrent : Timer](config: ApplicationConfig, client: Client[F]): F[Module[F]] = {
     for {
       cacheServices <- CacheServices.make[F, String, Rate](config.oneFrame.cacheTtl, config.oneFrame.cleanupInterval)
       oneFrameRepository = OneFrameRepository.make(client, config.oneFrame)
-      ratesService = RatesServices.live[F](oneFrameRepository)
-      ratesProgram = RatesProgram[F](ratesService, cacheServices)
+      ratesServiceDummy = RatesServices.dummy[F]
+      ratesServiceLive = RatesServices.live[F](oneFrameRepository)
+      ratesProgram = RatesProgram[F](ratesServiceDummy, ratesServiceLive, cacheServices)
       ratesHttpRoutes = new RatesHttpRoutes[F](ratesProgram).routes
       routesMiddleware = AutoSlash(_: HttpRoutes[F])
       appMiddleware = Timeout(config.http.timeout)(_: HttpApp[F])

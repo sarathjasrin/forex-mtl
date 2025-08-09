@@ -5,16 +5,20 @@ import cats.effect.Sync
 import cats.syntax.all._
 import forex.domain._
 import forex.programs.rates.errors._
-import forex.services.RatesService
+import forex.services.{RatesServiceDummy, RatesServiceLive}
 import forex.services.cache.CacheAlgebra
 import forex.services.logger.LoggerService
 
 
 class Program[F[_] : Sync](
-  ratesService: RatesService[F],
+  ratesServiceDummy: RatesServiceDummy[F],
+  ratesServiceLive: RatesServiceLive[F],
   cache: CacheAlgebra[F, String, Rate]
 ) extends Algebra[F] {
   private val logger = LoggerService.loggerFor[Program[F]]
+
+  override def getSingle(request: Protocol.GetSingleRateRequest): F[Either[Error, Rate]] =
+    EitherT(ratesServiceDummy.get(Rate.Pair(from = request.from, to = request.to))).leftMap(toProgramError(_)).value
 
   override def get(request: Protocol.GetRatesRequest): F[Either[Error, List[Rate]]] = {
     val pairStrings = request.pairs.map(p => s"${p.from.show}${p.to.show}")
@@ -33,7 +37,7 @@ class Program[F[_] : Sync](
         } else {
           LoggerService.info[F](logger, s"Cache miss for pairs: $missingPairs") >>
             EitherT(
-              ratesService.get(
+              ratesServiceLive.get(
                 request.pairs.filter(p => missingPairs.contains(s"${p.from.show}${p.to.show}"))
               )
             ).leftMap(errors.toProgramError)
@@ -54,8 +58,9 @@ class Program[F[_] : Sync](
 
 object Program {
   def apply[F[_] : Sync](
-    ratesService: RatesService[F],
+    ratesServiceDummy: RatesServiceDummy[F],
+    ratesServiceLive: RatesServiceLive[F],
     cache: CacheAlgebra[F, String, Rate]
-  ): Algebra[F] = new Program[F](ratesService, cache)
+  ): Algebra[F] = new Program[F](ratesServiceDummy, ratesServiceLive, cache)
 }
 

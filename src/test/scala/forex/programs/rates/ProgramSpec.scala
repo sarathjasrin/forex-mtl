@@ -4,7 +4,7 @@ package forex.programs.rates
 import cats.effect.IO
 import forex.domain._
 import forex.programs.rates.Protocol.GetRatesRequest
-import forex.services.RatesService
+import forex.services.{RatesServiceDummy, RatesServiceLive}
 import forex.services.cache.CacheAlgebra
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AsyncWordSpec
@@ -19,8 +19,13 @@ class ProgramSpec extends AsyncWordSpec with Matchers {
     "return cached rate if all requested pairs are found in cache" in {
       val request = GetRatesRequest(List(Rate.Pair(dummyRate.from, dummyRate.to)))
 
-      val ratesService: RatesService[IO] = new RatesService[IO] {
+      val ratesServiceLive: RatesServiceLive[IO] = new RatesServiceLive[IO] {
         override def get(pairs: List[Rate.Pair]): IO[Either[Error, List[Rate]]] =
+          fail("Should not call service when cache has data")
+      }
+
+      val ratesServiceDummy: RatesServiceDummy[IO] = new RatesServiceDummy[IO] {
+        override def get(pair: Rate.Pair): IO[Error Either Rate] =
           fail("Should not call service when cache has data")
       }
 
@@ -36,7 +41,7 @@ class ProgramSpec extends AsyncWordSpec with Matchers {
         override def cleanup: IO[Unit] = IO.unit
       }
 
-      val program = Program[IO](ratesService, cache)
+      val program = Program[IO](ratesServiceDummy, ratesServiceLive, cache)
       program.get(request).unsafeToFuture().map { result =>
         result shouldBe Right(List(dummyRate))
       }
@@ -47,9 +52,14 @@ class ProgramSpec extends AsyncWordSpec with Matchers {
 
       var putCalled = false
 
-      val ratesService: RatesService[IO] = new RatesService[IO] {
+      val ratesServiceLive: RatesServiceLive[IO] = new RatesServiceLive[IO] {
         override def get(pairs: List[Rate.Pair]): IO[Either[Error, List[Rate]]] =
           IO.pure(Right(List(dummyRate)))
+      }
+
+      val ratesServiceDummy: RatesServiceDummy[IO] = new RatesServiceDummy[IO] {
+        override def get(pairs: Rate.Pair): IO[Error Either Rate] =
+          IO.pure(Right(dummyRate))
       }
 
       val cache = new CacheAlgebra[IO, String, Rate] {
@@ -66,7 +76,7 @@ class ProgramSpec extends AsyncWordSpec with Matchers {
         override def cleanup: IO[Unit] = IO.unit
       }
 
-      val program = Program[IO](ratesService, cache)
+      val program = Program[IO](ratesServiceDummy, ratesServiceLive, cache)
       program.get(request).unsafeToFuture().map { result =>
         result shouldBe Right(List(dummyRate))
         putCalled shouldBe true
@@ -77,8 +87,13 @@ class ProgramSpec extends AsyncWordSpec with Matchers {
       val request = GetRatesRequest(List(Rate.Pair(dummyRate.from, dummyRate.to)))
       val error = new RuntimeException("Service failure")
 
-      val ratesService: RatesService[IO] = new RatesService[IO] {
+      val ratesServiceLive: RatesServiceLive[IO] = new RatesServiceLive[IO] {
         override def get(pairs: List[Rate.Pair]): IO[Either[Error, List[Rate]]] =
+          IO.pure(Left(Error.OneFrameLookupFailed(error.getMessage)))
+      }
+
+      val ratesServiceDummy: RatesServiceDummy[IO] = new RatesServiceDummy[IO] {
+        override def get(pairs: Rate.Pair): IO[Error Either Rate] =
           IO.pure(Left(Error.OneFrameLookupFailed(error.getMessage)))
       }
 
@@ -94,7 +109,7 @@ class ProgramSpec extends AsyncWordSpec with Matchers {
         override def cleanup: IO[Unit] = IO.unit
       }
 
-      val program = Program[IO](ratesService, cache)
+      val program = Program[IO](ratesServiceDummy, ratesServiceLive, cache)
       program.get(request).unsafeToFuture().map { result =>
         result shouldBe a[Left[_, _]]
       }
